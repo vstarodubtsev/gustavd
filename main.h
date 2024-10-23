@@ -1,7 +1,5 @@
-#ifndef __SERIALD_H
-#define __SERIALD_H
-
-#include <pthread.h>
+#ifndef __MAIN_H
+#define __MAIN_H
 
 #define DPRINTF(format, ...) fprintf(stderr, "%s(%d): " format, __func__, __LINE__, ## __VA_ARGS__)
 
@@ -11,15 +9,11 @@
 
 #define TTY_RD_SZ 256
 
-extern char ubus_path[];
-
 struct tty_q {
 	int len;
 	char buff[TTY_Q_SZ];
 } tty_q;
 
-extern struct tty_q tty_q;
-extern pthread_mutex_t tty_q_mutex;
 void fatal(const char *format, ...);
 
 extern int sig_exit;

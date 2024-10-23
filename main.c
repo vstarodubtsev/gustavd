@@ -8,19 +8,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/eventfd.h>
 #include <sys/types.h>
 #include <unistd.h>
 
 #include "fdio.h"
-#include "seriald.h"
+#include "main.h"
 #include "term.h"
-#include "ubus.h"
-#include "ubus_loop.h"
 
-int efd_notify_tty = -1;
-int efd_signal = -1;
-int ubus_pipefd[2];
 static int fd_tty;
 
 #define STO STDOUT_FILENO
@@ -34,9 +28,10 @@ int tty_write_sz;
 		if (tty_write_sz < TTY_WRITE_SZ_MIN) tty_write_sz = TTY_WRITE_SZ_MIN; \
 	} while (0)
 struct tty_q tty_q;
-pthread_mutex_t tty_q_mutex;
 
 int sig_exit = 0;
+
+int echo = 0;
 
 static struct {
 	char port[128];
@@ -58,8 +53,6 @@ static struct {
 	.socket = NULL, /* the library fall back to default socket when it is NULL */
 };
 
-char ubus_path[sizeof("serial.")+sizeof(opts.port)];
-
 static void show_usage(void);
 static void parse_args(int argc, char *argv[]);
 static void deadly_handler(int signum);
@@ -71,23 +64,16 @@ int main(int argc, char *argv[]);
 
 static void show_usage()
 {
-	printf("Usage: seriald [options] <TTY device>\n");
+	printf("Usage: gustavd [options] <TTY device>\n");
 	printf("\n");
 	printf("Options:\n");
 	printf("  -b <baudrate>\n");
 	printf("    baudrate should be one of: 0, 50, 75, 110, 134, 150, 200, 300, 600,\n");
 	printf("    1200, 1800, 2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400\n");
 	printf("    default to 115200\n");
-	printf("  -f s (=soft) | h (=hard) | n (=none)\n");
+	printf("  -f flow control s (=soft) | h (=hard) | n (=none)\n");
 	printf("    default to n\n");
-	printf("  -s <ubus socket>\n");
-	printf("    no need to give if you use the default one\n");
 	printf("\n");
-	printf("Examples:\n");
-	printf("  Get data:\n");
-	printf("    ubus listen serial\n");
-	printf("  Send data (replace <data> with the data you want to send):\n");
-	printf("    ubus call serial send '{\"data\": \"<data>\"}'\n");
 }
 
 void fatal(const char *format, ...)
@@ -100,7 +86,7 @@ void fatal(const char *format, ...)
 	len = vsnprintf(buf, sizeof(buf), format, args);
 	buf[sizeof(buf)-1] = '\0';
 	va_end(args);
-	
+
 	s = "\r\nFATAL: ";
 	writen_ni(STO, s, strlen(s));
 	writen_ni(STO, buf, len);
@@ -178,10 +164,7 @@ static void deadly_handler(int signum)
 {
 	DPRINTF("seriald is signaled with TERM\n");
 	if (!sig_exit) {
-		seriald_ubus_loop_stop();
 		sig_exit = 1;
-		if (efd_notify_tty >= 0) eventfd_write(efd_notify_tty, 1);
-		if (efd_signal >= 0) eventfd_write(efd_signal, 1);
 	}
 }
 
@@ -203,7 +186,7 @@ static void register_signal_handlers(void)
 
 	sigaction(SIGALRM, &ign_action, NULL);
 	sigaction(SIGHUP, &ign_action, NULL);
-	sigaction(SIGINT, &ign_action, NULL);
+	//sigaction(SIGINT, &ign_action, NULL);
 	sigaction(SIGPIPE, &ign_action, NULL);
 	sigaction(SIGQUIT, &ign_action, NULL);
 	sigaction(SIGUSR1, &ign_action, NULL);
@@ -218,20 +201,16 @@ static void loop(void)
 	char buff_rd[TTY_RD_SZ];
 	int write_sz;
 	int max_fd;
-	eventfd_t efd_value;
 
-	max_fd = (fd_tty > efd_notify_tty) ? fd_tty : efd_notify_tty;
+	max_fd = fd_tty;
 	tty_q.len = 0;
 
 	while (!sig_exit) {
 		FD_ZERO(&rdset);
 		FD_ZERO(&wrset);
 		FD_SET(fd_tty, &rdset);
-		FD_SET(efd_notify_tty, &rdset);
 
-		pthread_mutex_lock(&tty_q_mutex);
 		if (tty_q.len) FD_SET(fd_tty, &wrset);
-		pthread_mutex_unlock(&tty_q_mutex);
 
 		r = select(max_fd + 1, &rdset, &wrset, NULL, NULL);
 		if (r < 0)  {
@@ -254,16 +233,8 @@ static void loop(void)
 			}
 		}
 
-		if (FD_ISSET(efd_notify_tty, &rdset)) {
-			/* Being notified we have something to write to TTY */
-			if (eventfd_read(efd_notify_tty, &efd_value)) {
-				fatal("failed to read efd_notify_tty");
-			}
-		}
-
 		if (FD_ISSET(fd_tty, &wrset)) {
 			/* write to port */
-			pthread_mutex_lock(&tty_q_mutex);
 			write_sz = (tty_q.len < tty_write_sz) ? tty_q.len : tty_write_sz;
 			do {
 				n = write(fd_tty, tty_q.buff, write_sz);
@@ -271,7 +242,6 @@ static void loop(void)
 			if (n <= 0) fatal("write to term failed: %s", strerror(errno));
 			memmove(tty_q.buff, tty_q.buff + n, tty_q.len - n);
 			tty_q.len -= n;
-			pthread_mutex_unlock(&tty_q_mutex);
 		}
 	}
 }
@@ -293,70 +263,68 @@ static void tty_read_line_splitter(const int n, const char *buff_rd)
 			if (*p && *p != '\r' && *p != '\n') {
 				buff[buff_len] = *p;
 				buff[++buff_len] = '\0';
-			} else if ((!*p || *p == '\n') && buff_len > 0) {
+			} else if ((!*p || *p == '\n' || *p == '\r') && buff_len > 0) {
 				tty_read_line_cb(buff);
 				*buff = '\0';
 				buff_len = 0;
 			}
+
 			p++;
+	}
+}
+
+static void tty_write_line(const char *line)
+{
+	if( line == NULL )
+	{
+		return;
+	}
+
+	const int len = strlen(line);
+
+	if (tty_q.len + len < TTY_Q_SZ) {
+		memmove(tty_q.buff + tty_q.len, line, len);
+		tty_q.len += len;
+		tty_q.buff[tty_q.len] = '\n';
+		++tty_q.len;
+		tty_q.buff[tty_q.len] = '\r';
+		++tty_q.len;
 	}
 }
 
 static void tty_read_line_cb(const char *line)
 {
-	char format[] = "{\"data\": \"%s\"}\n";
-	char json[sizeof(format)+TTY_RD_SZ];
-	char *p;
-	int n;
-	int sz;
-
-	sprintf(json, format, line);
-	p = json;
-	sz = strlen(json);
-
-	while (sz > 0) {
-		do {
-			n = write(ubus_pipefd[1], p, sz);
-		} while (n < 0 && errno == EINTR);
-		if (n <= 0) fatal("write to pipe failed: %s", strerror(errno));
-		p += n;
-		sz -= n;
+	if( echo )
+	{
+		tty_write_line(line);
 	}
+
+	if (!strcasecmp(line, "AT") ||
+		!strcasecmp(line, "AT+CMEE=1")) {
+	} else if (!strcasecmp(line, "ATE1")) {
+		echo = 1;
+	} else if (!strcasecmp(line, "ATE0")) {
+		echo = 0;
+	} else if (!strcasecmp(line, "ATI")) {
+		tty_write_line("Manufacturer: SIMCOM BY GUSTAV");
+		tty_write_line("Model: A7909E");
+		tty_write_line("Revision: V1.0.009");
+		tty_write_line("IMEI: 65812565308830");
+	} else
+	{
+		tty_write_line("ERROR");
+		return;
+	}
+
+	tty_write_line("OK");
 }
 
 int main(int argc, char *argv[])
 {
 	int r;
-	pthread_t uloop_tid;
 
 	parse_args(argc, argv);
 	register_signal_handlers();
-	sprintf(ubus_path, "serial.%s", basename(opts.port));
-
-	r = pipe2(ubus_pipefd, O_CLOEXEC);
-	if (r < 0) fatal("cannot create pipe to ubus: %s", strerror(errno));
-
-	/* Seems like you cannot have multiple ubus connections in single process. */
-	/* So we fork. */
-	switch(fork()) {
-		case 0:
-			efd_signal = eventfd(0, EFD_CLOEXEC);
-			if (efd_signal < 0) {
-				fatal("cannot create efd_signal: %s", strerror(errno));
-			}
-			close(ubus_pipefd[1]);
-			seriald_ubus_run(opts.socket);
-			return EXIT_SUCCESS;
-		case -1:
-			fatal("cannot fork ubus_event_loop");
-	}
-
-	close(ubus_pipefd[0]);
-
-	efd_notify_tty = eventfd(0, EFD_CLOEXEC);
-	if (efd_notify_tty < 0) {
-		fatal("cannot create efd_notify_tty: %s", strerror(errno));
-	}
 
 	r = term_lib_init();
 	if (r < 0) fatal("term_init failed: %s", term_strerror(term_errno, errno));
@@ -386,14 +354,7 @@ int main(int argc, char *argv[])
 
 	set_tty_write_sz(term_get_baudrate(fd_tty, NULL));
 
-	r = seriald_ubus_loop_init(opts.socket);
-	if (r) fatal("failed to connect to ubus");
-
-	r = pthread_create(&uloop_tid, NULL, &seriald_ubus_loop, NULL);
-	if (r) fatal("can't create thread for uloop: %s", strerror(r));
-
 	loop();
 
-	seriald_ubus_loop_done();
 	return EXIT_SUCCESS;
 }
