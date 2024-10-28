@@ -7,19 +7,10 @@
 #define TTY_Q_SZ 8192
 #endif
 
-#define TTY_RD_SZ 256
-
-struct tty_q {
-	int len;
-	char buff[TTY_Q_SZ];
-} tty_q;
+#define TTY_RD_SZ 512
 
 void fatal(const char *format, ...);
 
-extern int sig_exit;
+extern void tty_write_line(const char *line);
 
-extern int efd_notify_tty;
-extern int efd_signal;
-extern int ubus_pipefd[];
-
-#endif /* __SERIALD_H */
+#endif /* __MAIN_H */
