@@ -18,6 +18,9 @@ enum network_mode_t
 } net_mode = NET_MODE_LTE;
 
 int echo = 0;
+int enqueueUssd = 0;
+
+const char* USSD_RESP = "+CUSD: 2,\"42616c616e733a20302e343920736f276d2e\",-12";
 
 void at_read_line_cb(const char *line)
 {
@@ -47,7 +50,6 @@ void at_read_line_cb(const char *line)
 		!strcasecmp(line, "AT+CGACT=0") ||
 		!strcasecmp(line, "AT+ZGACT=1,1") ||
 		!strcasecmp(line, "AT+COPS=3,0") ||
-		!strncasecmp(line, "AT+CUSD=1,", 10) ||
 		!strcasecmp(line, "AT+CMEE=1")) {
 	} else if (!strcasecmp(line, "ATE1")) {
 		echo = 1;
@@ -130,6 +132,11 @@ void at_read_line_cb(const char *line)
 	} else if (!strcasecmp(line, "AT+CGPADDR=1")) {
 		tty_write_line("+CGPADDR: 1, \"10.36.130.148\"");
 	} else if (!strcasecmp(line, "AT+CPMUTEMP")) {
+		if (enqueueUssd) {
+			enqueueUssd = 0;
+			tty_write_line(USSD_RESP);
+		}
+
 		tty_write_line("+CPMUTEMP: 36");
 	} else if (!strcasecmp(line, "AT+CNETCI?")) {
 		if (net_mode == NET_MODE_LTE) {
@@ -149,7 +156,6 @@ void at_read_line_cb(const char *line)
 		}
 	} else if (!strcasecmp(line, "AT+DIALMODE?")) {
 		tty_write_line("+DIALMODE: 0");
-
 	} else if (!strncasecmp(line, "AT+CNMP=", 8)) {
 		if (!strcmp(line + 8, "14")) {
 			net_mode = NET_MODE_UMTS;
@@ -221,6 +227,9 @@ void at_read_line_cb(const char *line)
 		}
 	} else if (!strcasecmp(line, "AT+CMGF?")) {
 		tty_write_line("+CMGF: 0");
+	} else if (!strncasecmp(line, "AT+CUSD=1,", 10)) {
+		enqueueUssd = 1;
+		sleep(1);
 	} else
 	{
 		tty_write_line("ERROR");
