@@ -1,8 +1,12 @@
 #include <string.h>
 #include <unistd.h>
+#include <stdbool.h>
+#include <ctype.h>
 
 #include "main.h"
 #include "at.h"
+
+#define FW_VERSION_							"1.3.2"
 
 enum cpms_t
 {
@@ -19,14 +23,45 @@ enum network_mode_t
 
 int echo = 0;
 int enqueueUssd = 0;
+int waitPdu = 0;
 
 const char* USSD_RESP = "+CUSD: 2,\"42616c616e733a20302e343920736f276d2e\",-12";
 
+static bool isPdu1a(const char *str)
+{
+	if (str == NULL || *str == 0) {
+		return false;
+	}
+
+	while (*str) {
+		if (!isxdigit(*str)) {
+
+			if (*str == 0x1a)
+			{
+				return true;
+			}
+
+			return false;
+		}
+		str++;
+	}
+
+	return false;
+}
+
 void at_read_line_cb(const char *line)
 {
-	if( echo )
+	if (echo)
 	{
 		tty_write_line(line);
+	}
+
+	if (waitPdu)
+	{
+		waitPdu = 0;
+		tty_write_line(isPdu1a(line) ? "OK" : "ERROR");
+
+		return;
 	}
 
 	if (!strcasecmp(line, "AT") ||
@@ -63,10 +98,10 @@ void at_read_line_cb(const char *line)
 	} else if (!strcasecmp(line, "AT+SIMCOMATI")) {
 		tty_write_line("Manufacturer: SIMCOM BY GUSTAV");
 		tty_write_line("Model: A7909E");
-		tty_write_line("Revision: 242203B03A7909M11A-M2_CUS");
+		tty_write_line("Revision: " FW_VERSION_);
 		tty_write_line("IMEI: 65812565308830");
 	} else if (!strcasecmp(line, "AT+CGMR")) {
-		tty_write_line("+CGMR: 242203B03A7909M11A-M2");
+		tty_write_line("+CGMR: " FW_VERSION_);
 	} else if (!strcasecmp(line, "AT+CSUB")) {
 		tty_write_line("+CSUB: B03V01");
 	} else if (!strcasecmp(line, "AT+UIMHOTSWAPLEVEL?")) {
@@ -230,6 +265,9 @@ void at_read_line_cb(const char *line)
 	} else if (!strncasecmp(line, "AT+CUSD=1,", 10)) {
 		enqueueUssd = 1;
 		sleep(1);
+	} else if (!strncasecmp(line, "AT+CMGS=", 8)) {
+		waitPdu = 1;
+		return;
 	} else
 	{
 		tty_write_line("ERROR");
