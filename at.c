@@ -6,7 +6,27 @@
 #include "main.h"
 #include "at.h"
 
-#define FW_VERSION_							"1.3.2"
+#define QUECTEL_5G
+
+#define FW_VERSION_							"1.5.1"
+#define IMEI_								"65812565308830"
+#define IMSI_								"252026983126791"
+#define ICCID_								"897010269813267917FF"
+
+#ifdef QUECTEL_5G
+
+#define MANUFACTURER_						"QUECTEL BY GUSTAV"
+#define MODEL_								"RM500U"
+#define SUBEDITION_							"V05"
+
+#else
+
+#define MANUFACTURER_						"SIMCOM BY GUSTAV"
+#define MODEL_								"A7909E"
+#define SUBEDITION_							"B03V01"
+
+#endif
+
 
 enum cpms_t
 {
@@ -16,10 +36,11 @@ enum cpms_t
 
 enum network_mode_t
 {
+	NET_MODE_AUTO,
 	NET_MODE_NR,
 	NET_MODE_LTE,
 	NET_MODE_UMTS
-} net_mode = NET_MODE_LTE;
+} net_mode = NET_MODE_AUTO;
 
 int echo = 0;
 int enqueueUssd = 0;
@@ -85,25 +106,38 @@ void at_read_line_cb(const char *line)
 		!strcasecmp(line, "AT+CGACT=0") ||
 		!strcasecmp(line, "AT+ZGACT=1,1") ||
 		!strcasecmp(line, "AT+COPS=3,0") ||
+		!strcasecmp(line, "AT+COPS=3,0") ||
+		!strcasecmp(line, "AT+QCFG=\"autoapn\",0") ||
+		!strcasecmp(line, "AT+QSIMDET=1,1") ||
+		!strcasecmp(line, "AT+QIACT=1") ||
+		!strncasecmp(line, "AT+CGPIAF=", 10) ||
+		!strncasecmp(line, "AT+QICSGP=", 10) ||
 		!strcasecmp(line, "AT+CMEE=1")) {
 	} else if (!strcasecmp(line, "ATE1")) {
 		echo = 1;
 	} else if (!strcasecmp(line, "ATE0")) {
 		echo = 0;
 	} else if (!strcasecmp(line, "ATI")) {
-		tty_write_line("Manufacturer: SIMCOM BY GUSTAV");
-		tty_write_line("Model: A7909E");
+		tty_write_line("Manufacturer: " MANUFACTURER_);
+		tty_write_line("Model: " MODEL_);
 		tty_write_line("Revision: V1.0.009");
-		tty_write_line("IMEI: 65812565308830");
+		tty_write_line("IMEI: " IMEI_);
 	} else if (!strcasecmp(line, "AT+SIMCOMATI")) {
-		tty_write_line("Manufacturer: SIMCOM BY GUSTAV");
-		tty_write_line("Model: A7909E");
+		tty_write_line("Manufacturer: " MANUFACTURER_);
+		tty_write_line("Model: " MODEL_);
 		tty_write_line("Revision: " FW_VERSION_);
-		tty_write_line("IMEI: 65812565308830");
+		tty_write_line("IMEI: " IMEI_);
+	} else if (!strcasecmp(line, "ATI;+CSUB")) {
+		tty_write_line(MANUFACTURER_);
+		tty_write_line(MODEL_);
+		tty_write_line("Revision: " FW_VERSION_);
+		tty_write_line("SubEdition: " SUBEDITION_);
+	} else if (!strcasecmp(line, "AT+GSN")) {
+		tty_write_line(IMEI_);
 	} else if (!strcasecmp(line, "AT+CGMR")) {
 		tty_write_line("+CGMR: " FW_VERSION_);
 	} else if (!strcasecmp(line, "AT+CSUB")) {
-		tty_write_line("+CSUB: B03V01");
+		tty_write_line("+CSUB: " SUBEDITION_);
 	} else if (!strcasecmp(line, "AT+UIMHOTSWAPLEVEL?")) {
 		tty_write_line("+UIMHOTSWAPLEVEL: 1");
 	} else if (!strcasecmp(line, "AT+UIMHOTSWAPON?")) {
@@ -117,11 +151,13 @@ void at_read_line_cb(const char *line)
 	} else if (!strcasecmp(line, "AT+CNBP?")) {
 		tty_write_line("+CNBP: 0X000700000FEB0180,0X000007FF3FDF3FFF");
 	} else if (!strcasecmp(line, "AT+CICCID")) {
-		tty_write_line("+ICCID: 897010269813267917FF");
+		tty_write_line("+ICCID: " ICCID_);
 	} else if (!strcasecmp(line, "AT+CSIM=10,\"0020000100\"")) {
 		tty_write_line("+CSIM:4,\"63C3\"");
+	} else if (!strcasecmp(line, "AT+QPINC=\"SC\"")) {
+		tty_write_line("+QPINC: \"SC\",3,10");
 	} else if (!strcasecmp(line, "AT+CIMI")) {
-		tty_write_line("252026983126791");
+		tty_write_line(IMSI_);
 	} else if (!strcasecmp(line, "AT+CNUM")) {
 		tty_write_line("+CME ERROR: 4");
 		return;
@@ -131,6 +167,8 @@ void at_read_line_cb(const char *line)
 		tty_write_line("+CREG: 0,0");
 	} else if (!strcasecmp(line, "AT+CEREG?")) {
 		tty_write_line("+CEREG: 0,1");
+	} else if (!strcasecmp(line, "AT+C5GREG?")) {
+		tty_write_line("+C5GREG: 0,0");
 	} else if (!strcasecmp(line, "AT+CGCONTRDP")) {
 		tty_write_line("+CGCONTRDP: 1,5,\"test.MNC002.MCC255.GPRS\",\"10.36.130.148\",\"\",\"10.97.52.68\",\"10.97.52.76\",\"\",\"\",0,0");
 	} else if (!strcasecmp(line, "AT+CSQ")) {
@@ -138,10 +176,10 @@ void at_read_line_cb(const char *line)
 	} else if (!strcasecmp(line, "AT+CGATT?")) {
 		tty_write_line("+CGATT: 1");
 	} else if (!strcasecmp(line, "AT+CPSI?")) {
-		if (net_mode == NET_MODE_LTE) {
-			tty_write_line("+CPSI: LTE,Online,252-02,0x260A,196089506,299,EUTRAN-BAND7,2850,5,5,21,47,43,17");
-		} else {
+		if (net_mode == NET_MODE_UMTS) {
 			tty_write_line("+CPSI: WCDMA,Online,252-02,0x2612,-294967296,WCDMA IMT 2000,437,10687,0,-3,-83,-32768,-83,-15");
+		} else {
+			tty_write_line("+CPSI: LTE,Online,252-02,0x260A,196089506,299,EUTRAN-BAND7,2850,5,5,21,47,43,17");
 		}
 	} else if (!strcasecmp(line, "AT+COPS?")) {
 		if (net_mode == NET_MODE_UMTS) {
@@ -150,7 +188,7 @@ void at_read_line_cb(const char *line)
 			tty_write_line("+COPS: 0,0,\"GustaFon\",9");
 		}
 	} else if (!strcasecmp(line, "AT+ZCAINFO?")) {
-		if (net_mode == NET_MODE_LTE) {
+		if (net_mode != NET_MODE_UMTS) {
 			tty_write_line("+ZCAINFO: 299,7,17758,2850,10;341,1,3,1802,20");
 		}
 	} else if (!strcasecmp(line, "AT+COPS=?")) {
@@ -174,14 +212,14 @@ void at_read_line_cb(const char *line)
 
 		tty_write_line("+CPMUTEMP: 36");
 	} else if (!strcasecmp(line, "AT+CNETCI?")) {
-		if (net_mode == NET_MODE_LTE) {
+		if (net_mode != NET_MODE_UMTS) {
 			tty_write_line("+CNETCISRVINFO: MCC-MNC: 252-02,TAC: 9738,cellid: 196089506,rsrp: 47,rsrq: 21, pci: 299,earfcn: 2850");
 			tty_write_line("+CNETCINONINFO: 0,MCC-MNC: 000-00,TAC: 0,cellid: -1,rsrp: 23,rsrq: 0,pci: 195,earfcn: 1602");
 			tty_write_line("+CNETCINONINFO: 1,MCC-MNC: 000-00,TAC: 0,cellid: -1,rsrp: 31,rsrq: 17,pci: 92,earfcn: 1602");
 		}
 		tty_write_line("+CNETCI: 0");
 	} else if (!strcasecmp(line, "AT+SIGNS")) {
-		if (net_mode == NET_MODE_LTE) {
+		if (net_mode != NET_MODE_UMTS) {
 			tty_write_line("+RSRP0: -109");
 			tty_write_line("+RSRP1: -112");
 			tty_write_line("+RSRQ0: -11");
@@ -191,6 +229,63 @@ void at_read_line_cb(const char *line)
 		}
 	} else if (!strcasecmp(line, "AT+DIALMODE?")) {
 		tty_write_line("+DIALMODE: 0");
+	} else if (!strcasecmp(line, "AT+QCFG=\"nat\"")) {
+		tty_write_line("+QCFG: \"nat\",1");
+	} else if (!strcasecmp(line, "AT+QCFG=\"ethernet\"")) {
+		tty_write_line("+QCFG: \"ethernet\",0");
+	} else if (!strcasecmp(line, "AT+QCFG=\"pcie/mode\"")) {
+		tty_write_line("+QCFG: \"pcie/mode\",0");
+	} else if (!strcasecmp(line, "AT+QUIMSLOT?")) {
+		tty_write_line("+QUIMSLOT: 1");
+	} else if (!strcasecmp(line, "AT+QCCID?")) {
+		tty_write_line("+QCCID: " ICCID_);
+	} else if (!strcasecmp(line, "AT+QSPN?")) {
+		tty_write_line("+QSPN: \"Virtual\",\"Virtual\",\"Virtual\",0,\"25201\"");
+	} else if (!strcasecmp(line, "AT+QNETDEVCTL?")) {
+		tty_write_line("+QNETDEVCTL: 1,1,1");
+	} else if (!strcasecmp(line, "AT+QNWINFO?")) {
+		tty_write_line("+QNWINFO: \"FDD LTE\",26203,\"LTE BAND 1\",300");
+		tty_write_line("+QNWINFO: \"NR5G-NSA\",26203,\"\",0");
+	} else if (!strcasecmp(line, "AT+QENG=\"servingcell\"")) {
+		tty_write_line("+QENG: \"servingcell\",\"CONNECT\"");
+		tty_write_line("+QENG: \"LTE\",\"FDD\",262,03,1212126,118,300,1,5,5,B8FD,-108,-10,-78,4,10,23,19");
+		tty_write_line("+QENG: \"NR5G-NSA\",262,03,0,0,0,0,0,0,0,B8FD,0");
+	} else if (!strcasecmp(line, "AT+QENG=\"neighbourcell\"")) {
+		tty_write_line("+QENG: \"neighbourcell intra\",\"LTE\",300,118,-11,-11,17,1,1,-,-,-,-");
+		tty_write_line("+QENG: \"neighbourcell inter\",\"LTE\",6200,297,-106,-16,0,2,255,-1,-1,16");
+		tty_write_line("+QENG: \"neighbourcell inter\",\"LTE\",1600,183,-110,-15,0,-2,255,-1,-1,16");
+	} else if (!strcasecmp(line, "AT+QTEMP")) {
+		tty_write_line("+QTEMP: \"soc-thermal\",\"36\"");
+		tty_write_line("+QTEMP: \"pa-thermal\",\"36\"");
+		tty_write_line("+QTEMP: \"pa5g-thermal\",\"36\"");
+	} else if (!strcasecmp(line, "AT+QCAINFO")) {
+		tty_write_line("+QCAINFO: \"PCC\",300,100,\"LTE BAND 1\",1,118,-108,-10,-79,3\"");
+	} else if (!strcasecmp(line, "AT+QANTRSSI?")) {
+		tty_write_line("+QANTRSSI: 2,-74,-79");
+	} else if (!strcasecmp(line, "AT+QNWPREFCFG=?")) {
+		tty_write_line("+QNWPREFCFG: \"mode_pref\",AUTO:WCDMA:LTE:NR5G:NR5G-SA:NR5G-NSA");
+		tty_write_line("+QNWPREFCFG: \"gw_band\",1:2:5:8");
+		tty_write_line("+QNWPREFCFG: \"lte_band\",1:2:3:4:5:7:8:20:28:38:40:41:66");
+		tty_write_line("+QNWPREFCFG: \"nr5g_band\",1:3:5:7:8:20:28:38:40:41:66:77:78");
+		tty_write_line("+QNWPREFCFG: \"all_band_reset\"");
+		tty_write_line("+QNWPREFCFG: \"srv_domain\",(0-2)");
+		tty_write_line("+QNWPREFCFG: \"voice_domain\",(0-3)");
+		tty_write_line("+QNWPREFCFG: \"ue_usage_setting\",(0,1)");
+		tty_write_line("+QNWPREFCFG: \"roam_pref\",(0-3)");
+		tty_write_line("+QNWPREFCFG: \"cell_blacklist\",(1-3),(0-15),<freq-pci list>");
+		tty_write_line("+QNWPREFCFG: \"mode_blacklist\",(0-5)");
+		tty_write_line("+QNWPREFCFG: \"rat_acq_order\",NR5G:LTE:WCDMA");
+		tty_write_line("+QNWPREFCFG: \"nr5g_band_blacklist\",(0,1),<nr5g_band_blacklist>");
+	} else if (!strncasecmp(line, "AT+QNWPREFCFG=\"mode_pref\",", 26)) {
+		if (!strcmp(line + 26, "WCDMA")) {
+			net_mode = NET_MODE_UMTS;
+		} else if (!strcmp(line + 26, "LTE")) {
+			net_mode = NET_MODE_LTE;
+		} else if (!strcmp(line + 26, "NR5G")) {
+			net_mode = NET_MODE_NR;
+		}
+	} else if (!strncasecmp(line, "AT+QNWPREFCFG=", 14)) {
+		;
 	} else if (!strncasecmp(line, "AT+CNMP=", 8)) {
 		if (!strcmp(line + 8, "14")) {
 			net_mode = NET_MODE_UMTS;

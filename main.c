@@ -167,7 +167,7 @@ static void parse_args(int argc, char *argv[])
 
 static void deadly_handler(int signum)
 {
-	DPRINTF("seriald is signaled with TERM\n");
+	DPRINTF("gustavd is signaled with TERM\n");
 	if (!sig_exit) {
 		sig_exit = 1;
 	}
