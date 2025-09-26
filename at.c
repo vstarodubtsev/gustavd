@@ -212,13 +212,13 @@ void at_read_line_cb(const char *line)
 			"(1, \"MTS GUS\", \"MTS GUS\", \"25201\", 7),"
 			",(0,1,2,3,4),(0,1,2)");
 	} else if (!strcasecmp(line, "AT+CGPADDR=1")) {
-		tty_write_line("+CGPADDR: 1, \"10.36.130.148\"");
-	} else if (!strcasecmp(line, "AT+CPMUTEMP")) {
 		if (enqueueUssd) {
 			enqueueUssd = 0;
 			tty_write_line(USSD_RESP);
 		}
 
+		tty_write_line("+CGPADDR: 1, \"10.36.130.148\"");
+	} else if (!strcasecmp(line, "AT+CPMUTEMP")) {
 		tty_write_line("+CPMUTEMP: 36");
 	} else if (!strcasecmp(line, "AT+CNETCI?")) {
 		if (net_mode != NET_MODE_UMTS) {
@@ -254,6 +254,7 @@ void at_read_line_cb(const char *line)
 		tty_write_line("+QSPN: \"Virtual\",\"Virtual\",\"Virtual\",0,\"25201\"");
 	} else if (!strcasecmp(line, "AT+QNETDEVCTL?")) {
 		tty_write_line("+QNETDEVCTL: 1,2,1");
+		tty_write_line("+QNETDEVCTL: 2,2,0");
 	} else if (!strcasecmp(line, "AT+QNWINFO")) {
 		if (net_mode == NET_MODE_AUTO) {
 			tty_write_line("+QNWINFO: \"FDD LTE\",26203,\"LTE BAND 1\",300");
@@ -269,17 +270,21 @@ void at_read_line_cb(const char *line)
 		if (net_mode == NET_MODE_AUTO) {
 			tty_write_line("+QENG: \"servingcell\",\"CONNECT\"");
 			tty_write_line("+QENG: \"LTE\",\"FDD\",262,03,1212126,118,300,1,5,5,B8FD,-108,-10,-78,4,10,23,19");
-			//tty_write_line("+QENG: \"NR5G-NSA\",262,03,0,0,0,0,0,0,0,B8FD,0");
 			tty_write_line("+QENG: \"NR5G-NSA\",262,03,170,-93,3,-8,529950,41,0,157E,1");
 		} else if (net_mode == NET_MODE_NR) {
-			tty_write_line("+QENG: \"servingcell\",\"NOCONN\",\"NR5G-SA\",\"TDD\",262,01,""D0602D105,109,D06900,633984,78,100,-110,-8,3,0,13,1");
+			tty_write_line("+QENG: \"servingcell\",\"CONNECT\",\"NR5G-SA\",\"TDD\",262,00,C22221001,808,1421AF,504990,41,100,-71,0,27,7,42,1");
 		} else if (net_mode == NET_MODE_LTE) {
 			tty_write_line("+QENG: \"servingcell\",\"CONNECT\",\"LTE\",\"FDD\",262,02,1951D49,12,2850,7,5,5,260A,-92,-8,-68,20,13,0,31");
 		} else if (net_mode == NET_MODE_UMTS) {
 			tty_write_line("+QENG: \"servingcell\",\"CONNECT\",\"WCDMA\",262,02,2612,656BAF,10687,166,-84,-8,1,6,0");
 		}
 	} else if (!strcasecmp(line, "AT+QENG=\"neighbourcell\"")) {
-		if (net_mode != NET_MODE_UMTS) {
+		if (net_mode == NET_MODE_AUTO) {
+			tty_write_line("+QENG: \"neighbourcell intra\",\"LTE\",6300,319,-102,-10,26,1,7,-,-,-,-");
+			tty_write_line("+QENG: \"neighbourcell inter\",\"LTE\",100,183,-131,-24,0,-13,255,-1,-1,16");
+		} else if (net_mode == NET_MODE_NR) {
+			tty_write_line("+QENG: \"neighbourcell\",\"NR\",529950,170,-88,-6,7,32");
+		} else if (net_mode == NET_MODE_LTE) {
 			tty_write_line("+QENG: \"neighbourcell intra\",\"LTE\",300,118,-11,-11,17,1,1,-,-,-,-");
 			tty_write_line("+QENG: \"neighbourcell inter\",\"LTE\",6200,297,-106,-16,0,2,255,-1,-1,16");
 			tty_write_line("+QENG: \"neighbourcell inter\",\"LTE\",1600,183,-110,-15,0,-2,255,-1,-1,16");
@@ -290,11 +295,14 @@ void at_read_line_cb(const char *line)
 		tty_write_line("+QTEMP: \"pa5g-thermal\",\"36\"");
 	} else if (!strcasecmp(line, "AT+QCAINFO")) {
 		if (net_mode == NET_MODE_AUTO) {
-			;
+			tty_write_line("+QCAINFO: \"PCC\",6300,50,\"LTE BAND 20\",1,319,-103,-9,-76,8");
+			tty_write_line("+QCAINFO: \"SCC\",100,100,\"LTE BAND 1\",1,372,-111,-13,-,6");
+			tty_write_line("+QCAINFO: \"SCC\",372750,20,\"NR N3\",2,431,-108,-7,-89,7");
 		} else if (net_mode == NET_MODE_NR) {
-			;
+			tty_write_line("+QCAINFO: \"PCC\",504990,100,\"NR N41\",1,808,-71,0,-57,26");
 		} else if (net_mode == NET_MODE_LTE) {
-			tty_write_line("+QCAINFO: \"PCC\",300,100,\"LTE BAND 1\",1,118,-108,-10,-79,3\"");
+			tty_write_line("+QCAINFO: \"PCC\",300,100,\"LTE BAND 1\",1,118,-108,-10,-79,3");
+			tty_write_line("+QCAINFO: \"SCC\",6300,50,\"LTE BAND 20\",1,319,-103,-9,-76,8");
 		} else if (net_mode == NET_MODE_UMTS) {
 			;
 		}
