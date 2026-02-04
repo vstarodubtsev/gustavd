@@ -8,10 +8,10 @@
 
 #define QUECTEL_5G
 
-#define FW_VERSION_							"1.5.1"
-#define IMEI_								"65812565308830"
-#define IMSI_								"252026983126791"
-#define ICCID_								"897010269813267917FF"
+#define FW_VERSION_							"1.5.2"
+#define IMEI_								"352812192643726"
+#define IMSI_								"2620726983126791"
+#define ICCID_								"89262070872643044636"
 
 #ifdef QUECTEL_5G
 
@@ -108,6 +108,8 @@ void at_read_line_cb(const char *line)
 		!strcasecmp(line, "AT+ZGACT=1,1") ||
 		!strcasecmp(line, "AT+COPS=3,0") ||
 		!strcasecmp(line, "AT+QCFG=\"autoapn\",0") ||
+		!strncasecmp(line, "AT+QCFG=\"ims\",", 14) ||
+		!strncasecmp(line, "AT+QNWLOCK=", 11) ||
 		!strcasecmp(line, "AT+QSIMDET=1,1") ||
 		!strcasecmp(line, "AT+QIACT=1") ||
 		!strcasecmp(line, "AT+QNETDEVCTL=1,1,1") ||
