@@ -10,7 +10,7 @@
 
 #define FW_VERSION_							"1.5.2"
 #define IMEI_								"352812192643726"
-#define IMSI_								"2620726983126791"
+#define IMSI_								"262076983126791"
 #define ICCID_								"89262070872643044636"
 
 #ifdef QUECTEL_5G
