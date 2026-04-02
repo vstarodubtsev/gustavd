@@ -115,6 +115,7 @@ void at_read_line_cb(const char *line)
 		!strcasecmp(line, "AT+QNETDEVCTL=1,1,1") ||
 		!strncasecmp(line, "AT+CGPIAF=", 10) ||
 		!strncasecmp(line, "AT+QICSGP=", 10) ||
+		!strncasecmp(line, "AT+CSCS=\"", 9) ||
 		!strcasecmp(line, "AT+CMEE=1")) {
 		;
 	} else if (!strcasecmp(line, "ATE1")) {
