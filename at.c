@@ -8,7 +8,7 @@
 
 #define QUECTEL_5G
 
-#define FW_VERSION_							"1.5.2"
+#define FW_VERSION_							"1.5.3"
 #define IMEI_								"352812192643726"
 #define IMSI_								"262076983126791"
 #define ICCID_								"89262070872643044636"
@@ -140,6 +140,8 @@ void at_read_line_cb(const char *line)
 		tty_write_line(IMEI_);
 	} else if (!strcasecmp(line, "AT+CGMR")) {
 		tty_write_line("+CGMR: " FW_VERSION_);
+	} else if (!strcasecmp(line, "AT+QGMR")) {
+		tty_write_line(FW_VERSION_);
 	} else if (!strcasecmp(line, "AT+CMEE?")) {
 		tty_write_line("+CMEE: 1");
 	} else if (!strcasecmp(line, "AT+CSUB")) {
@@ -248,6 +250,8 @@ void at_read_line_cb(const char *line)
 		tty_write_line("+QCFG: \"pcie/mode\",0");
 	} else if (!strcasecmp(line, "AT+QCFG=\"usbnet\"")) {
 		tty_write_line("+QCFG: \"usbnet\",0");
+	} else if (!strcasecmp(line, "AT+QCFG=\"ip6/cfg\"")) {
+		tty_write_line("+QCFG: \"ip6/cfg\",\"neigh\",1");
 	} else if (!strcasecmp(line, "AT+QUIMSLOT?")) {
 		tty_write_line("+QUIMSLOT: 1");
 	} else if (!strcasecmp(line, "AT+QCCID")) {
